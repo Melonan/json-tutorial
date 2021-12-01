@@ -20,13 +20,33 @@ static int test_pass = 0;
 
 #define EXPECT_EQ_INT(expect, actual) EXPECT_EQ_BASE((expect) == (actual), expect, actual, "%d")
 
+
+
+
+/*
+    在各个test函数中 第一个 EXPECT_EQ_INT 用来判断parse的解析结果返回的代码是否和预期的一样
+    第二个  EXPECT_EQ_INT用来判断解析后的 v 节点 type 值是否在 lept_parse() 函数中顺利被设置为LEPT_NULL
+*/
 static void test_parse_null() {
     lept_value v;
     v.type = LEPT_FALSE;
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "null"));
     EXPECT_EQ_INT(LEPT_NULL, lept_get_type(&v));
 }
-
+/* 设计LEPT_TRUE的测试*/
+static void test_parse_true() {
+    lept_value v;
+    v.type = LEPT_FALSE;
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "true"));
+    EXPECT_EQ_INT(LEPT_TRUE, lept_get_type(&v));
+}
+/* 设计LEPT_FALSE的测试*/
+static void test_parse_false() {
+    lept_value v;
+    v.type = LEPT_NULL;
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "false"));
+    EXPECT_EQ_INT(LEPT_FALSE, lept_get_type(&v));
+}
 static void test_parse_expect_value() {
     lept_value v;
 
@@ -58,14 +78,23 @@ static void test_parse_root_not_singular() {
 }
 
 static void test_parse() {
+    printf("\n test_parse_null ");
     test_parse_null();
+    printf("\n test_parse_ture ");
+    test_parse_true();
+    printf("\n test_parse_false ");
+    test_parse_false();
+    printf("\n test_parse_expect_value ");
     test_parse_expect_value();
+    printf("\n test_parse_invalid_value ");
     test_parse_invalid_value();
+    printf("\n test_parse_root_not_singular ");
     test_parse_root_not_singular();
 }
 
 int main() {
     test_parse();
+    /* 输出百分号必须打两个百分号 */
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return main_ret;
 }
