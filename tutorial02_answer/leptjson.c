@@ -31,6 +31,7 @@ static int lept_parse_literal(lept_context* c, lept_value* v, const char* litera
 }
 
 static int lept_parse_number(lept_context* c, lept_value* v) {
+    /* 这就是一种自动机的思路啊 决绝子 */
     const char* p = c->json;
     if (*p == '-') p++;
     if (*p == '0') p++;
@@ -56,6 +57,18 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
     v->type = LEPT_NUMBER;
     c->json = p;
     return LEPT_PARSE_OK;
+#if 0
+
+Macro constant that expands to a positive expression of type double.
+
+A function returns this value when the result of a mathematical operation yields a value that is too large in magnitude to be representable with its return type. 
+This is one of the possible range errors, and is signaled by setting errno to ERANGE.
+
+Actually, functions may either return a positive or a negative HUGE_VAL (HUGE_VAL or -HUGE_VAL) to indicate the sign of the result.
+#endif
+
+
+
 }
 
 static int lept_parse_value(lept_context* c, lept_value* v) {

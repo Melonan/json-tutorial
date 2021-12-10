@@ -29,28 +29,31 @@ static int test_pass = 0;
 */
 static void test_parse_null() {
     lept_value v;
-    v.type = LEPT_FALSE;
+    /* v.type = LEPT_FALSE;*/
+    /* 这个错误没有调整过来 nulll显示正确*/
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "nulll"));
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "null"));
     EXPECT_EQ_INT(LEPT_NULL, lept_get_type(&v));
 }
 /* 设计LEPT_TRUE的测试*/
 static void test_parse_true() {
     lept_value v;
-    v.type = LEPT_FALSE;
+    /*v.type = LEPT_FALSE;*/  
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "true"));
+ /* EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "tre"));*/
     EXPECT_EQ_INT(LEPT_TRUE, lept_get_type(&v));
 }
 /* 设计LEPT_FALSE的测试*/
 static void test_parse_false() {
     lept_value v;
-    v.type = LEPT_NULL;
+    /*v.type = LEPT_NULL;*/  
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "false"));
     EXPECT_EQ_INT(LEPT_FALSE, lept_get_type(&v));
 }
 static void test_parse_expect_value() {
     lept_value v;
 
-    v.type = LEPT_FALSE;
+    v.type = LEPT_FALSE; 
     EXPECT_EQ_INT(LEPT_PARSE_EXPECT_VALUE, lept_parse(&v, ""));
     EXPECT_EQ_INT(LEPT_NULL, lept_get_type(&v));
 
