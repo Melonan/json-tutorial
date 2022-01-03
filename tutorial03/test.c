@@ -99,6 +99,7 @@ static void test_parse_number() {
         lept_value v;\
         lept_init(&v);\
         EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, json));\
+        fprintf(stdout, "TEST_STRING: %s \n" , json);\
         EXPECT_EQ_INT(LEPT_STRING, lept_get_type(&v));\
         EXPECT_EQ_STRING(expect, lept_get_string(&v), lept_get_string_length(&v));\
         lept_free(&v);\
@@ -107,7 +108,7 @@ static void test_parse_number() {
 static void test_parse_string() {
     TEST_STRING("", "\"\"");
     TEST_STRING("Hello", "\"Hello\"");
-#if 0
+#if 1
     TEST_STRING("Hello\nWorld", "\"Hello\\nWorld\"");
     TEST_STRING("\" \\ / \b \f \n \r \t", "\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"");
 #endif
@@ -115,9 +116,11 @@ static void test_parse_string() {
 
 #define TEST_ERROR(error, json)\
     do {\
+        /* 产生初始值 */\
         lept_value v;\
         lept_init(&v);\
         v.type = LEPT_FALSE;\
+        fprintf(stdout,"TEST ERROR: %s \n", json);\
         EXPECT_EQ_INT(error, lept_parse(&v, json));\
         EXPECT_EQ_INT(LEPT_NULL, lept_get_type(&v));\
         lept_free(&v);\
@@ -144,6 +147,7 @@ static void test_parse_invalid_value() {
 }
 
 static void test_parse_root_not_singular() {
+    /*在 lept_parse中能够检查出来 */
     TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "null x");
 
     /* invalid number */
@@ -163,7 +167,8 @@ static void test_parse_missing_quotation_mark() {
 }
 
 static void test_parse_invalid_string_escape() {
-#if 0
+#if 1
+    /*非法转义字符 ： 在lept_parse_string中 switch 可以检测到*/
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\v\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\'\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\0\"");
@@ -172,7 +177,8 @@ static void test_parse_invalid_string_escape() {
 }
 
 static void test_parse_invalid_string_char() {
-#if 0
+#if 1
+    /*大小小于32 都是非法字符*/
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_CHAR, "\"\x01\"");
     TEST_ERROR(LEPT_PARSE_INVALID_STRING_CHAR, "\"\x1F\"");
 #endif
@@ -190,6 +196,16 @@ static void test_access_null() {
 static void test_access_boolean() {
     /* \TODO */
     /* Use EXPECT_TRUE() and EXPECT_FALSE() */
+    lept_value v;
+    lept_init(&v);
+    
+    lept_set_boolean(&v, 1);
+    EXPECT_TRUE(lept_get_boolean(&v));
+
+    lept_set_boolean(&v, 0);
+    EXPECT_FALSE(lept_get_boolean(&v));
+
+    lept_free(&v);
 }
 
 static void test_access_number() {

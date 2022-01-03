@@ -1,3 +1,7 @@
+
+
+
+
 #include "leptjson.h"
 #include <assert.h>  /* assert() */
 #include <errno.h>   /* errno, ERANGE */
@@ -87,6 +91,8 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
 }
 
 static int lept_parse_string(lept_context* c, lept_value* v) {
+    /*head ： 备份栈顶*/
+    /*然后使用PUTC进行压栈， 每次才压栈一个字符ch*/
     size_t head = c->top, len;
     const char* p;
     EXPECT(c, '\"');
@@ -94,15 +100,71 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
     for (;;) {
         char ch = *p++;
         switch (ch) {
+            
             case '\"':
+                /*如果是单引号证明已经到了结尾， 需要set string 了*/
+                /* 随着不断的压栈， c->top不断增长*/
+                /*因为 top 不断增长， 所以 top-head就是这次轧入栈的长度*/
                 len = c->top - head;
+                /*经过lept_context_pop之后， c->top被重置 ， 即将len长度的该段元素全部弹出*/
+                /*(const char*)lept_context_pop(c, len) 实际上返回的就是 c->stack + head*/
                 lept_set_string(v, (const char*)lept_context_pop(c, len), len);
                 c->json = p;
                 return LEPT_PARSE_OK;
+
+                /*
+                string = quotation-mark *char quotation-mark
+                char = unescaped /
+                escape (
+                    %x22 /          ; "    quotation mark  U+0022
+                    %x5C /          ; \    reverse solidus U+005C
+                    %x2F /          ; /    solidus         U+002F
+                    %x62 /          ; b    backspace       U+0008
+                    %x66 /          ; f    form feed       U+000C
+                    %x6E /          ; n    line feed       U+000A
+                    %x72 /          ; r    carriage return U+000D
+                    %x74 /          ; t    tab             U+0009
+                    %x75 4HEXDIG )  ; uXXXX                U+XXXX
+                escape = %x5C          ; \
+                quotation-mark = %x22  ; "
+                unescaped = %x20-21 / %x23-5B / %x5D-10FFFF
+                */
+            case '\\':
+                switch (*p++)
+                {
+                    case '\"':
+                        PUTC(c,'\"');break;
+                    case '\\':
+                        PUTC(c,'\\');break;
+                    case '/':
+                        PUTC(c,'/');break;
+                    case 'b':
+                        PUTC(c,'\b');break;
+                    case 'f':
+                        PUTC(c,'\f');break;
+                    case 'n':
+                        PUTC(c,'\n');break;
+                    case 'r':
+                        PUTC(c,'\r');break;
+                    case 't':
+                        PUTC(c,'\t');break;
+                    default:
+                        /* 非法的转义字符 复位c->top*/
+                        c->top = head;
+                        return LEPT_PARSE_INVALID_STRING_ESCAPE;
+                }
+                break;
             case '\0':
+                /*读取到了json字符串的结尾，证明少了结尾双引号，c->top 恢复到原来的指针 ， 丢弃之前轧入的东西*/
                 c->top = head;
                 return LEPT_PARSE_MISS_QUOTATION_MARK;
             default:
+                /*非法的字符  大小小于32的字符都是非法字符 */
+                if((unsigned char)ch < 0x20)
+                {
+                    c->top = head;
+                    return LEPT_PARSE_INVALID_STRING_CHAR;
+                }
                 PUTC(c, ch);
         }
     }
@@ -154,11 +216,24 @@ lept_type lept_get_type(const lept_value* v) {
 
 int lept_get_boolean(const lept_value* v) {
     /* \TODO */
-    return 0;
+    assert(v!=NULL && (v->type == LEPT_TRUE || v->type == LEPT_FALSE));
+    /* answer 的 写法*/
+#if 0
+    return v->type == LEPT_TRUE;
+#endif
+    if(v->type == LEPT_FALSE) return 0;
+    if(v->type == LEPT_TRUE) return 1;
 }
 
 void lept_set_boolean(lept_value* v, int b) {
     /* \TODO */
+    /* 我忘记lept_free了*/
+    lept_free(v);
+    if(b)
+    v->type = LEPT_TRUE;
+    else
+    v->type = LEPT_FALSE; 
+
 }
 
 double lept_get_number(const lept_value* v) {
@@ -168,6 +243,9 @@ double lept_get_number(const lept_value* v) {
 
 void lept_set_number(lept_value* v, double n) {
     /* \TODO */
+    assert( v != NULL);
+    v->u.n = n;
+    v->type = LEPT_NUMBER;
 }
 
 const char* lept_get_string(const lept_value* v) {
