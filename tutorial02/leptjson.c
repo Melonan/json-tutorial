@@ -1,8 +1,8 @@
 #include "leptjson.h"
 #include <assert.h>  /* assert() */
 #include <stdlib.h>  /* NULL, strtod() */
-#include <errno.h>
-#include <math.h>
+#include <errno.h>  /*errno c库宏*/
+#include <math.h>   /*HUGE_VAL 宏*/
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
 
 typedef struct {
@@ -130,12 +130,41 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
 
     errno = 0;
     /* \TODO validate number */
+
+#if 0
+strtod ：将c风格字符串转换为浮点数
+函数：
+double strtod (const char* str, char** endptr);
+参数
+str
+    C-string beginning with the representation of a floating-point number.
+endptr
+    Reference to an already allocated object of type char*, whose value is set by the function 
+    to the next character in str after the numerical value.
+    This parameter can also be a null pointer, in which case it is not used.
+
+#endif
+
+
     v->n = strtod(c->json, NULL);
     /*如果是空的*/
+/*
+    errno - number of last error
+
+    C 库宏 ERANGE 
+        表示一个范围错误，它在输入参数超出数学函数定义的范围时发生，errno 被设置为 ERANGE。
+    HUGE_VAL
+        当函数的结果不可以表示为浮点数时。如果是因为结果的幅度太大以致于无法表示，
+        则函数会设置 errno 为 ERANGE 来表示范围错误，并返回一个由宏 HUGE_VAL 或者它的否定（- HUGE_VAL）命名的
+        一个特定的很大的值。
+        如果结果的幅度太小，则会返回零值。
+        在这种情况下，error 可能会被设置为 ERANGE，也有可能不会被设置为 ERANGE。
+*/
     if(errno == ERANGE  && (v->n == HUGE_VAL || v->n == -HUGE_VAL))
         return LEPT_PARSE_NUMBER_TOO_BIG;
 
     v->type = LEPT_NUMBER;
+
     /*这一句很关键， 如果去掉的话就无法检测 test_parse_root_not_singular 函数中invalid number部分了*/
     c->json = p;
     return LEPT_PARSE_OK;
@@ -146,8 +175,8 @@ static int lept_parse_value(lept_context* c, lept_value* v) {
         case 't':  return lept_parse_literal(c, v, "true", LEPT_TRUE);
         case 'f':  return lept_parse_literal(c, v,"false" ,LEPT_FALSE);
         case 'n':  return lept_parse_literal(c, v,"null", LEPT_NULL);
-        default:   return lept_parse_number(c, v);
         case '\0': return LEPT_PARSE_EXPECT_VALUE;
+        default:   return lept_parse_number(c, v);
     }
 }
 
