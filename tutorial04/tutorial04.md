@@ -48,7 +48,7 @@ C 标准库没有关于 Unicode 的处理功能（C++11 有），我们会实现
 
 同学可能会发现，4 位的 16 进制数字只能表示 0 至 0xFFFF，但之前我们说 UCS 的码点是从 0 至 0x10FFFF，那怎么能表示多出来的码点？
 
-其实，U+0000 至 U+FFFF 这组 Unicode 字符称为基本多文种平面（basic multilingual plane, BMP），还有另外 16 个平面。那么 BMP 以外的字符，JSON 会使用代理对（surrogate pair）表示 `\uXXXX\uYYYY`。在 BMP 中，保留了 2048 个代理码点。如果第一个码点是 U+D800 至 U+DBFF，我们便知道它的代码对的高代理项（high surrogate），之后应该伴随一个 U+DC00 至 U+DFFF 的低代理项（low surrogate）。然后，我们用下列公式把代理对 (H, L) 变换成真实的码点：
+其实，U+0000 至 U+FFFF 这组 Unicode 字符称为基本多文种平面（basic multilingual plane, BMP），还有另外 16 个平面。那么 BMP 以外的字符，JSON 会使用代理对（surrogate pair）表示 `\uXXXX\uYYYY`。在 BMP 中，保留了 2048 个代理码点。如果第一个码点是 U+D800 至 U+DBFF（算一下确实是2^11），我们便知道它的代码对的高代理项（high surrogate），之后应该伴随一个 U+DC00 至 U+DFFF 的低代理项（low surrogate）。然后，我们用下列公式把代理对 (H, L) 变换成真实的码点：
 
 ~~~
 codepoint = 0x10000 + (H − 0xD800) × 0x400 + (L − 0xDC00)
@@ -155,3 +155,161 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
 3. 加入对代理对的处理，不正确的代理对范围要返回 `LEPT_PARSE_INVALID_UNICODE_SURROGATE` 错误。
 
 如果你遇到问题，有不理解的地方，或是有建议，都欢迎在评论或 [issue](https://github.com/miloyip/json-tutorial/issues) 中提出，让所有人一起讨论。
+
+
+
+
+
+```c++
+
+static int lept_parse_string(lept_context* c, lept_value* v) {
+    size_t head = c->top, len;
+    unsigned u;
+    const char* p;
+    EXPECT(c, '\"');
+    p = c->json;
+    for (;;) {
+        char ch = *p++;
+        switch (ch) {
+            case '\"':
+                len = c->top - head;
+                lept_set_string(v, (const char*)lept_context_pop(c, len), len);
+                c->json = p;
+                return LEPT_PARSE_OK;
+            case '\\':
+                switch (*p++) {
+                    case '\"': PUTC(c, '\"'); break;
+                    case '\\': PUTC(c, '\\'); break;
+                    case '/':  PUTC(c, '/' ); break;
+                    case 'b':  PUTC(c, '\b'); break;
+                    case 'f':  PUTC(c, '\f'); break;
+                    case 'n':  PUTC(c, '\n'); break;
+                    case 'r':  PUTC(c, '\r'); break;
+                    case 't':  PUTC(c, '\t'); break;
+                    case 'u':
+                        if (!(p = lept_parse_hex4(p, &u)))
+                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
+                        /* \TODO surrogate handling */
+                        if(*p == '\\' && *(p+1) == 'u')
+                        {
+                            p+=2;
+                            /*果第一个码点是 U+D800 至 U+DBFF（算一下确实是2^11），
+                            我们便知道它的代码对的高代理项（high surrogate），
+                            之后应该伴随一个 U+DC00 至 U+DFFF 的低代理项（low surrogate）。*/
+                            if(u >= 0xD800 && u<= 0xDBFF)
+                            {
+                                unsigned u2 = 0;
+                                unsigned i;
+                                for ( i = 0; i < 4; i++)
+                                {
+                                    u2 += ((*p++)-'0') << (3-i)*4;
+                                }
+                                if(u2>=0xDC00 && u2 <= 0xDFFF)
+                                {
+                                    /*codepoint = 0x10000 + (H − 0xD800) × 
+                                    0x400 + (L − 0xDC00)*/
+                                    u = 0x10000 + (u - 0xD800) * 0x400 + (u2-0xDC00);
+                                }
+                                else
+                                STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                            }
+                            else{
+                                STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                            }
+                        }
+                        
+                        lept_encode_utf8(c, u);
+                        break;
+                    default:
+                        STRING_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE);
+                }
+                break;
+            case '\0':
+                STRING_ERROR(LEPT_PARSE_MISS_QUOTATION_MARK);
+            default:
+                if ((unsigned char)ch < 0x20)
+                    STRING_ERROR(LEPT_PARSE_INVALID_STRING_CHAR);
+                PUTC(c, ch);
+        }
+    }
+}
+
+```
+
+
+
+```c
+
+static const char* lept_parse_hex4(const char* p, unsigned* u) {
+    /* \TODO */
+    // 解析码点！！
+    // 将p字符串 中的json表示的数字 转化入u中
+    char ch;
+    for (size_t i = 0; i < 4; i++)
+    {
+        ch = *p++;
+        if(ch>='0' && ch <= 'F')
+        {
+            // 正确的
+            u += (ch-'0')<<(3-i)*4;
+        }
+        else
+        {
+            // 错误的
+            p = NULL;
+            break;
+        }
+    }
+    
+    
+    return p;
+}
+
+```
+
+
+
+```
+static void lept_encode_utf8(lept_context* c, unsigned u) {
+    /*按第 3 节谈到的 UTF-8 编码原理，实现 `lept_encode_utf8()`。
+    这函数假设码点在正确范围 U+0000 ~ U+10FFFF（用断言检测）。*/
+    assert(u >= 0x00000 && u<=0x10FFFF);
+    /* \TODO */
+    /*
+    |  U+0000 ~ U+007F   |  7   | 0xxxxxxx |          |          |          |
+    | :----------------: | :--: | :------: | :------: | :------: | :------: |
+    |  U+0080 ~ U+07FF   |  11  | 110xxxxx | 10xxxxxx |          |          |
+    |  U+0800 ~ U+FFFF   |  16  | 1110xxxx | 10xxxxxx | 10xxxxxx |          |
+    | U+10000 ~ U+10FFFF |  21  | 11110xxx | 10xxxxxx | 10xxxxxx | 10xxxxxx |
+    */
+    if(u >= 0x0000 && u <= 0x007F)
+    {
+        PUTC (c, OutputByte(u));
+    }
+    if(u >= 0x0080 && u <= 0x07FF)
+    {
+        PUTC(c, OutputByte(0xC0 | ((u >> 6)   & 0x1F)));
+        PUTC(c, OutputByte(0x80 | (  u        & 0x3F)));
+    }
+    if (u >= 0x0800 && u <= 0xFFFF) {
+        PUTC (c, OutputByte(0xE0 | ((u >> 12) & 0x0F))); /* 0xE0 = 11100000 */
+        PUTC (c, OutputByte(0x80 | ((u >>  6) & 0x3F))); /* 0x80 = 10000000 */
+        PUTC (c, OutputByte(0x80 | ( u        & 0x3F))); /* 0x3F = 00111111 */
+    }
+    if (u >= 0x10000 && u <= 0x10FFFF) {
+        PUTC (c, OutputByte(0xF0 | ((u >> 18) & 0x07)));
+        PUTC (c, OutputByte(0x80 | ((u >> 12) & 0x3F))); /* 0xE0 = 11100000 */
+        PUTC (c, OutputByte(0x80 | ((u >>  6) & 0x3F))); /* 0x80 = 10000000 */
+        PUTC (c, OutputByte(0x80 | ( u        & 0x3F))); /* 0x3F = 00111111 */
+    }
+}
+
+char OutputByte(unsigned num)
+{
+    char ch;
+    sprintf(&ch, "%x", num);
+    return ch;
+}
+
+```
+

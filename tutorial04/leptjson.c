@@ -8,7 +8,7 @@
 #include <math.h>    /* HUGE_VAL */
 #include <stdlib.h>  /* NULL, malloc(), realloc(), free(), strtod() */
 #include <string.h>  /* memcpy() */
-
+#include <stdio.h>
 #ifndef LEPT_PARSE_STACK_INIT_SIZE
 #define LEPT_PARSE_STACK_INIT_SIZE 256
 #endif
@@ -92,18 +92,90 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
 
 static const char* lept_parse_hex4(const char* p, unsigned* u) {
     /* \TODO */
+    /* 解析码点！！
+     将p字符串 中的json表示的数字 转化入u中*/
+    char ch;
+    unsigned i;
+    for ( i = 0; i < 4; i++)
+    {
+        ch = *p++;
+        if(ch>='0' && ch <= '9' )
+        {
+            /*正确的*/
+            *u += (ch-'0')<<((3-i)*4);
+        }
+        else
+        if(ch>='a' && ch <='f')
+        {
+            *u += (ch-'a'+10)<<((3-i)*4);
+        }
+        else
+        if(ch>='A'&& ch<='F')
+        {
+            *u += (ch-'A'+10)<<((3-i)*4);
+        }
+        else
+        {
+            /*错误的 */
+            return NULL;
+        }
+    }
+    
+    
     return p;
 }
 
 static void lept_encode_utf8(lept_context* c, unsigned u) {
+    /*按第 3 节谈到的 UTF-8 编码原理，实现 `lept_encode_utf8()`。
+    这函数假设码点在正确范围 U+0000 ~ U+10FFFF（用断言检测）。*/
+    assert(u >= 0x00000 && u<=0x10FFFF);
     /* \TODO */
+    /*
+    |  U+0000 ~ U+007F   |  7   | 0xxxxxxx |          |          |          |
+    | :----------------: | :--: | :------: | :------: | :------: | :------: |
+    |  U+0080 ~ U+07FF   |  11  | 110xxxxx | 10xxxxxx |          |          |
+    |  U+0800 ~ U+FFFF   |  16  | 1110xxxx | 10xxxxxx | 10xxxxxx |          |
+    | U+10000 ~ U+10FFFF |  21  | 11110xxx | 10xxxxxx | 10xxxxxx | 10xxxxxx |
+    */
+
+   #if 1
+    if(u >= 0x0000 && u <= 0x007F)
+    {
+        PUTC(c, (u));
+    }
+    if(u >= 0x0080 && u <= 0x07FF)
+    {
+        PUTC(c, (0xC0 | ((u >> 6)   & 0xFF)));
+        PUTC(c, (0x80 | (  u        & 0x3F)));
+    }
+    if (u >= 0x0800 && u <= 0xFFFF) {
+        PUTC (c, (0xE0 | ((u >> 12) & 0xFF))); /* 0xE0 = 11100000 */
+        PUTC (c, (0x80 | ((u >>  6) & 0x3F))); /* 0x80 = 10000000 */
+        PUTC (c, (0x80 | ( u        & 0x3F))); /* 0x3F = 00111111 */
+    }
+    if (u >= 0x10000 && u <= 0x10FFFF) {
+        PUTC (c, (0xF0 | ((u >> 18) & 0xFF)));
+        PUTC (c, (0x80 | ((u >> 12) & 0x3F))); /* 0xE0 = 11100000 */
+        PUTC (c, (0x80 | ((u >>  6) & 0x3F))); /* 0x80 = 10000000 */
+        PUTC (c, (0x80 | ( u        & 0x3F))); /* 0x3F = 00111111 */
+    }
+
+    #endif
 }
+#if 0
+char OutputByte(unsigned num)
+{
+    char ch;
+    sprintf(&ch, "%x", num);
+    return ch;
+}
+#endif
 
 #define STRING_ERROR(ret) do { c->top = head; return ret; } while(0)
 
 static int lept_parse_string(lept_context* c, lept_value* v) {
     size_t head = c->top, len;
-    unsigned u;
+    unsigned u=0;
     const char* p;
     EXPECT(c, '\"');
     p = c->json;
@@ -129,6 +201,35 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
                         if (!(p = lept_parse_hex4(p, &u)))
                             STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
                         /* \TODO surrogate handling */
+
+                            /*果第一个码点是 U+D800 至 U+DBFF（算一下确实是2^11），
+                            我们便知道它的代码对的高代理项（high surrogate），
+                            之后应该伴随一个 U+DC00 至 U+DFFF 的低代理项（low surrogate）。*/
+                        if(u >= 0xD800 && u<= 0xDBFF)
+                        {
+                            if(*p == '\\')
+                            p++;
+                            else
+                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                            
+                            if (*p == 'u')
+                            p++;
+                            else
+                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                            
+                            unsigned u2 = 0;
+                            if (!(p = lept_parse_hex4(p, &u2)))
+                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
+                            if(u2>=0xDC00 && u2 <= 0xDFFF)
+                            {
+                                /*codepoint = 0x10000 + (H − 0xD800) × 
+                                0x400 + (L − 0xDC00)*/
+                                u = 0x10000 + (u - 0xD800) * 0x400 + (u2-0xDC00);
+                            }
+                            else
+                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                        }
+                        
                         lept_encode_utf8(c, u);
                         break;
                     default:
